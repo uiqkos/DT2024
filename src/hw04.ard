@@ -175,23 +175,23 @@
 \func D-elim (P : D -> \Type)
              (con1-f : \Pi (n : Nat) -> P (con1 n))
              (con2-f : \Pi (d1 d2 : D) -> P d1 -> P d2 -> P (con2 d1 d2))
-             (con3-f : \Pi (g : Nat -> D) (n : Nat) -> P (g n) -> P (con3 g))
+             (con3-f : \Pi (g : Nat -> D) -> (\Pi (n : Nat) -> P (g n)) -> P (con3 g))
              (d : D) : P d
 \elim d
     | con1 n => con1-f n
     | con2 d1 d2 => con2-f d1 d2 (D-elim P con1-f con2-f con3-f d1) (D-elim P con1-f con2-f con3-f d2)
-    | con3 g => con3-f g 100 (D-elim P con1-f con2-f con3-f (g 100))
+    | con3 g => con3-f g (\lam n => D-elim P con1-f con2-f con3-f (g n))
 
 \func D-rec (P : \Type)
             (con1-f : Nat -> P)
             (con2-f : P -> P -> P)
-            (con3-f : (Nat -> D) -> P -> P)
+            (con3-f : (Nat -> D) -> (Nat -> P) -> P)
             (d : D) : P
   => D-elim
       (\lam _ => P)
       con1-f
       (\lam _ _ p1 p2 => con2-f p1 p2)
-      (\lam g n p => con3-f g p)
+      con3-f
       d
 
 
@@ -213,14 +213,15 @@
       Nat
       (\lam n => n)
       (\lam p1 p2 => p1 + p2)
-      (\lam g p => p)
+      (\lam g q => q (q 100))
       d
 
 
 \func foo-1 : foo (con1 10) = foo' (con1 10) => idp
 \func foo-2 : foo (con2 (con1 15) (con1 0)) = foo' (con2 (con1 15) (con1 0)) => idp
 \func foo-3 : foo (con3 (\lam n => con1 n)) = foo' (con3 (\lam n => con1 n)) => idp
-\func foo-4 : foo (con3 (\lam n => con1 n)) = 100 => idp
+\func foo-4 : foo' (con3 (\lam n => con1 n)) = 100 => idp
+\func foo-5 : foo (con3 (\lam n => con3 (\lam m => con1 (m + n)))) = foo' (con3 (\lam n => con3 (\lam m => con1 (m + n)))) => idp
 
 -- 12. Определите рекурсор и элиминатор для List.
 
