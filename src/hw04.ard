@@ -32,13 +32,7 @@
 \func lookup {A : \Type} (l : List A) (i : Nat) (p : T (i < length l)) : A
   | nil, 0, ()
   | a :: l, 0, p => a
-  | a :: l, suc i, p => lookup l i (rec-T l i p)
-  \where {
-    \func rec-T {A : \Type} (l : List A) (n : Nat) (p : T (suc n < suc (length l))) : T (n < length l)
-      | nil, 0, ()
-      | a :: l, 0, () => ()
-      | a :: l, suc n, () => rec-T l n ()
-  }
+  | a :: l, suc i, p => lookup l i p
 
 -- 2. Реализуйте аналоги функции replicate для vec и Vec (эта функция создает список заданной длины, состоящий из повторений данного элемента).
 
