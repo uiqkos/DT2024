@@ -1,9 +1,22 @@
 \import Data.Bool
+\import Data.List (List, ::, nil)
+\import Data.Maybe
+\import Function.Meta
+\import Paths
+\import lect01 (Empty)
 \import lect04
+\open Nat
+
 
 -- 1. Напишите функцию lookup, которая принимает List A и натуральное число и возвращает элемент по заданому индексу.
 --    В общем случае эту функцию определить невозможно, т.к. индекс может быть больше, чем число элементов в списке.
 --    Поэтому эта функция должна дополнительно еще принимать доказательство того, что индекс находится в допустимых границах, в виде T (n < length xs).
+
+
+
+\func T (b : Bool) : \Type
+  | true => \Sigma
+  | false => Empty
 
 \func \infix 4 < (x y : Nat) : Bool
   | 0, 0 => false
@@ -11,34 +24,103 @@
   | suc x, 0 => false
   | suc x, suc y => x < y
 
-\func lookup => {?}
+\func length {A : \Type} (l : List A) : Nat
+  | nil => 0
+  | a :: l => 1 + length l
+
+
+\func lookup {A : \Type} (l : List A) (i : Nat) (p : T (i < length l)) : A
+  | nil, 0, ()
+  | a :: l, 0, p => a
+  | a :: l, suc i, p => lookup l i (rec-T l i p)
+  \where {
+    \func rec-T {A : \Type} (l : List A) (n : Nat) (p : T (suc n < suc (length l))) : T (n < length l)
+      | nil, 0, ()
+      | a :: l, 0, () => ()
+      | a :: l, suc n, () => rec-T l n ()
+  }
 
 -- 2. Реализуйте аналоги функции replicate для vec и Vec (эта функция создает список заданной длины, состоящий из повторений данного элемента).
 
+\func replicate-vec {A : \Type} (n : Nat) (v : A) : vec A n \elim n
+  | 0 => ()
+  | suc n => (v, replicate-vec n v)
+
+\func replicate-Vec {A : \Type} (n : Nat) (v : A) : Vec A n \elim n
+  | 0 => Vec.nil
+  | suc n => cons v (replicate-Vec n v)
+
+
 -- 3. Реализуйте аналоги функции map для vec и Vec.
+
+\func map-vec {A B : \Type} {n : Nat} (f : A -> B) (v : vec A n) : vec B n \elim n
+  | 0 => ()
+  | suc n => (f (head n v), map-vec f (tail n v))
+
+\func map-Vec {A B : \Type} {n : Nat} (f : A -> B) (v : Vec A n) : Vec B n \elim n
+  | 0 => Vec.nil
+  | suc n => cons (f (Head v)) (map-Vec f (Tail v))
 
 -- 4. Реализуйте аналоги функции zipWith для vec и Vec.
 --    Функция должна принимать вектора одинаковой длины.
 
+\func zipWith-vec {A B C : \Type} {n : Nat} (f : A -> B -> C) (v1 : vec A n) (v2 : vec B n) : vec C n \elim n
+  | 0 => ()
+  | suc n => (f (head n v1) (head n v2), zipWith-vec f (tail n v1) (tail n v2))
+
+\func zipWith-Vec {A B C : \Type} {n : Nat} (f : A -> B -> C) (v1 : Vec A n) (v2 : Vec B n) : Vec C n \elim n
+  | 0 => Vec.nil
+  | suc n => cons (f (Head v1) (Head v2)) (zipWith-Vec f (Tail v1) (Tail v2))
+
 -- 5. Определите тип CTree A n полных бинарных деревьев высоты ровно n, которые хранят элементы только во внутренних узлах, но не в листьях.
 --    Высота листа равна 0.
 
-\data CTree (A : \Type) (n : Nat)
+\data CTree (A : \Type) (n : Nat) \elim n
+  | 0 => CLeaf
+  | suc n => CNode A (CTree A n) (CTree A n)
 
 -- 6. Определите тип Tree A n бинарных деревьев высоты не больше n, которые хранят элементы только во внутренних узлах, но не в листьях.
 --    Высота листа равна 0.
 
-\data Tree (A : \Type) (n : Nat)
+\data Tree (A : \Type) (n : Nat)  \elim n
+  | 0 => Leaf
+  | suc n => Node A (Maybe (Tree A n)) (Maybe (Tree A n))
 
 -- определите функцию, возвращающую высоту дерева.
 
-\func height {A : \Type} (n : Nat) (t : Tree A n) : Fin (suc n) => {?}
+\open Nat
+
+\func height {A : \Type} (n : Nat) (t : Tree A n) : Fin (suc n)
+  | 0, Leaf => fzero
+  | suc n, Node a nothing nothing => fsuc fzero
+  | suc n, Node a (just l) nothing => fsuc $ height n l
+  | suc n, Node a nothing (just r) => fsuc $ height n r
+  | suc n, Node a (just l) (just r) => fsuc $ max n (height n l) (height n r)
+
+  \where {
+    \func max (n : Nat) (x y : Fin (suc n)) : Fin (suc n)
+      | suc n, fzero, fzero => fzero
+      | suc n, fzero, fsuc y => fsuc y
+      | suc n, fsuc x, fzero => fsuc x
+      | suc n, fsuc x, fsuc y => fsuc (max n x y)
+      | 0, x, y => fzero
+  }
+
+\func t1-height : height 2 (Node 1 (just (Node 2 nothing nothing)) nothing) = fsuc (fsuc fzero) => idp
+
 
 -- 7. Функции Fin n -> A соответствуют спискам элементов A длины n.
 --     Функция, преобразующая Vec A n в Fin n -> A, была реализована на лекции.
 --     Реализуйте обратную функцию.
 
-\func coin {A : \Type} {n : Nat} (f : Fin n -> A) : Vec A n => {?}
+\func fromNat (n : Nat) : Fin (suc n)
+  | 0 => fzero
+  | suc n => fsuc (fromNat n)
+
+\func coin {A : \Type} {n : Nat} (f : Fin n -> A) : Vec A n \elim n
+  | 0 => Vec.nil
+  | suc n => Vec.cons (f (fromNat n)) (coin (\lam x => f(fsuc x)))
+
 
 -- Optional task
 -- 8. Определите тип матриц и ряд функций над ними.
@@ -60,11 +142,28 @@
 -- умножение матриц
 
 -- z ─ нейтральный элемент по сложению.
-\func matMul {A : \Type} (z : A) (add mul : A -> A -> A) (n m k : Nat) (M : Mat A n m) (N : Mat A m k) : Mat A n k => {?}
+
+\func matMul {A : \Type} (z : A) (add mul : A -> A -> A) (n m k : Nat) (M : Mat A n m) (N : Mat A m k) : Mat A n k =>
+  {?}
 
 -- 9. Определите факториал через Nat-rec.
 
+\func fac (n : Nat) : Nat => Nat-rec Nat 1 (\lam x r => r * suc x) n
+
+\func fac-10 : fac 10 = 3628800 => idp
+
+\func fac-0 : fac 0 = 1 => idp
+
+\func fac-4 : fac 4 = 24 => idp
+
 -- 10. Докажите ассоциативность сложения для натуральных чисел через Nat-elim.
+
+\func +-assoc (a b c : Nat) : a + (b + c) = (a + b) + c \elim a
+  | 0 => idp
+  | suc a' => pmap suc $ +-assoc a' b c
+
+\func +-assoc' (a b c : Nat) : a + (b + c) = (a + b) + c =>
+  Nat-elim (\lam a => a + (b + c) = (a + b) + c) idp (\lam x p => pmap suc p) a
 
 -- 11. Определите рекурсор и элиминатор для D.
 
@@ -73,6 +172,30 @@
   | con2 D D
   | con3 (Nat -> D)
 
+\func D-elim (P : D -> \Type)
+             (con1-f : \Pi (n : Nat) -> P (con1 n))
+             (con2-f : \Pi (d1 d2 : D) -> P d1 -> P d2 -> P (con2 d1 d2))
+             (con3-f : \Pi (g : Nat -> D) (n : Nat) -> P (g n) -> P (con3 g))
+             (d : D) : P d
+\elim d
+    | con1 n => con1-f n
+    | con2 d1 d2 => con2-f d1 d2 (D-elim P con1-f con2-f con3-f d1) (D-elim P con1-f con2-f con3-f d2)
+    | con3 g => con3-f g 100 (D-elim P con1-f con2-f con3-f (g 100))
+
+\func D-rec (P : \Type)
+            (con1-f : Nat -> P)
+            (con2-f : P -> P -> P)
+            (con3-f : (Nat -> D) -> P -> P)
+            (d : D) : P
+  => D-elim
+      (\lam _ => P)
+      con1-f
+      (\lam _ _ p1 p2 => con2-f p1 p2)
+      (\lam g n p => con3-f g p)
+      d
+
+
+
 {- To check that the definition of D-elim and D-rec is correct, you can try to implement foo using D-rec.
 \func foo (d : D) : Nat
   | con1 n => n
@@ -80,4 +203,49 @@
   | con3 g => foo (g (foo (g 100)))
 -}
 
+\func foo (d : D) : Nat
+  | con1 n => n
+  | con2 d1 d2 => foo d1 + foo d2
+  | con3 g => foo (g (foo (g 100)))
+
+\func foo' (d : D) : Nat
+  => D-rec
+      Nat
+      (\lam n => n)
+      (\lam p1 p2 => p1 + p2)
+      (\lam g p => p)
+      d
+
+
+\func foo-1 : foo (con1 10) = foo' (con1 10) => idp
+\func foo-2 : foo (con2 (con1 15) (con1 0)) = foo' (con2 (con1 15) (con1 0)) => idp
+\func foo-3 : foo (con3 (\lam n => con1 n)) = foo' (con3 (\lam n => con1 n)) => idp
+\func foo-4 : foo (con3 (\lam n => con1 n)) = 100 => idp
+
 -- 12. Определите рекурсор и элиминатор для List.
+
+\func List-elim {A : \Type}
+                (P : List A -> \Type)
+                (z : P nil)
+                (s : \Pi (x : A) (l : List A) -> P l -> P (x :: l))
+                (l : List A) : P l
+\elim l
+  | nil => z
+  | x :: xs => s x xs (List-elim P z s xs)
+
+\func List-rec {A : \Type}
+               (P : \Type)
+               (z : P)
+               (s : A -> List A -> P -> P)
+               (l : List A) : P
+  => List-elim (\lam _ => P) z (\lam x xs r => s x xs r) l
+
+
+\func List-sum (l : List Nat) : Nat => List-rec Nat 0 (\lam x xs r => x + r) l
+
+
+\func List-sum-1 : List-sum (1 :: 2 :: 3 :: nil) = 6 => idp
+\func List-sum-2 : List-sum nil = 0 => idp
+\func List-sum-3 : List-sum (1 :: 2 :: 3 :: 4 :: 5 :: nil) = 15 => idp
+\func List-sum-4 : List-sum (8 :: 9 :: 10 :: nil) = 27 => idp
+
