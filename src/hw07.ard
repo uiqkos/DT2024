@@ -1,46 +1,131 @@
 \import Data.Maybe
+\import Data.Or
+\import Function.Meta
 \import Logic
+\import Meta
+\import Paths
+\import Paths.Meta
+\import lect05 (funExt)
 \import lect07
-\open Nat(+)
+\open Nat (+)
 
 -- 1. Определите функцию swap несколькими способами.
 
 -- При помощи \cowith и доступа к полям.
-\func swap {A B : \Type} (p : Pair A B) : Pair B A => {?}
+
+\func swap {A B : \Type} (p : Pair A B) : Pair B A \cowith
+  | fst_ => p.snd_
+  | snd_ => p.fst_
 
 -- При помощи \new и паттерн матчинга.
-\func swap' {A B : \Type} (p : Pair A B) : Pair B A => {?}
+
+\func swap' {A B : \Type} (p : Pair A B) : Pair B A => \new Pair {
+  | fst_ => p.snd_
+  | snd_ => p.fst_
+}
 
 -- При помощи \new и доступа к полям.
-\func swap'' {A B : \Type} (p : Pair A B) : Pair B A => {?}
+
+\func swap'' {A B : \Type} (p : Pair A B) : Pair B A => \new Pair B A p.snd_ p.fst_
 
 -- 2. Докажите, что swap (swap p) = p.
 
-\func swap-involutive {A B : \Type} (p : Pair A B) : swap (swap p) = p => {?}
+\func swap-involutive {A B : \Type} (p : Pair A B) : swap (swap p) = p => idp
 
 -- 3. Докажите, что тип PosNat 0 пустой, а тип PosNat 1 нет.
 
-\func zero-isNotPos (p : PosNat 0) : Empty => {?}
+\func zero-isNotPos (p : PosNat 0) : Empty => absurd p.p
 
-\func one-isPos : PosNat 1 => {?}
+\func one-isPos : PosNat 1 => \new PosNat 1 ()
 
 -- 4. Определите \record, состоящий из пар взаимно простых натуральных чисел.
 --    Определите тип, состоящий из натуральных чисел, взаимно простых с 60.
 
+\record Primes
+  | p : Nat
+  | q : Nat
+  | p-q-primes : \Pi (n : Nat) -> Or (n = 1) (
+    \Sigma (\Pi (d : Nat) -> Not (d * n = p))
+           (\Pi (d : Nat) -> Not (d * n = q)))
+
+\func Primes60 : \Type => Primes 60
+
 -- 5. Закончите определение класса монад. Этот класс должен содержать все монадные законы и реализовывать все поля из класса функторов.
+
+\func \infix 3 *> {A B C : \Type} (f : A -> B) (g : B -> C) : A -> C => \lam x => g (f x)
 
 \class Monad \extends Functor
   | return {A : \Set} : A -> F A
   | \infixl 1 >>= {A B : \Set} : F A -> (A -> F B) -> F B
-
+  | return>>=f {A B : \Set} (a : A) (f : A -> F B) : (return a >>= f) = f a
+  | f>>=return {A : \Set} (fa : F A) : (fa >>= return) = fa
+  | >>=-assoc {A B C : \Set} (fa : F A) (f : A -> F B) (g : B -> F C) : ((fa >>= f) >>= g) = (fa >>= (\lam x => f x >>= g))
+  | fmap f fa => fa >>= \lam y => return (f y)
+  | fmap-id => f>>=return
+  | fmap-comp {A B C : \Set} => \lam f g x =>
+      \let
+        | assoc => >>=-assoc x (\lam y => return (f y)) (\lam y => return (g y))
+      \in rewrite assoc (pmap (x >>=) (funExt (\lam z => F C) (\lam a =>
+      \let
+        | p => return>>=f (f a) \lam y => return (g y)
+      \in inv p)))
 -- 6. Определите \instance Monad для Maybe.
 
-\instance MaybeMonad : Monad Maybe => {?}
+\instance MaybeMonad : Monad Maybe
+  | return => just
+  | >>= fa f => cases fa \with {
+    | nothing => nothing
+    | just a => f a
+  }
+
+  | return>>=f a f => idp
+  | f>>=return fa => cases fa \with {
+    | nothing => idp
+    | just a => idp
+  }
+  | >>=-assoc => \lam fa f g =>
+      cases fa \with {
+        | nothing => idp
+        | just a => idp
+      }
+
 
 -- 7. Определите \instance Monad для State и State'.
 
 \record State (S A : \Type)
   | state : S -> \Sigma S A
 
+\instance StateMonad {S : \Set} : Monad (State S)
+  | return a => \new State {
+    | state => \lam s => (s, a)
+  }
+  | >>= {A B : \Set} (fa : State S A) (f : A -> State S B) : State S B \cowith {
+    | state => \lam s => \let | sig => fa.state s | ns : State S B => f sig.2 \in ns.state sig.1
+  }
+  | return>>=f => \lam a f => idp
+  | f>>=return => \lam fa => idp
+  | >>=-assoc => \lam fa f g => idp
+
 \data State' (S A : \Type)
   | state' (S -> \Sigma S A)
+
+\instance State'Monad {S : \Set} : Monad (State' S)
+  | return a => state' (\lam s => (s, a))
+
+  | >>= => \lam fa f =>
+      state' (\lam s => \case (stateof fa) s \with {
+      sig => (stateof (f sig.2)) sig.1
+      })
+
+  | return>>=f => \lam a f => cases (f a) \with {
+    | state' _x => idp
+  }
+  | f>>=return => \lam fa => cases fa \with {
+    | state' _x => idp
+  }
+  | >>=-assoc => \lam fa f g => idp
+
+  \where {
+    \func stateof {S A : \Type} (s : State' S A) : S -> \Sigma S A
+      | state' _x => _x
+  }
