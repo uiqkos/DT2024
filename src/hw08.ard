@@ -1,14 +1,102 @@
+\import Algebra.Meta
+\import Arith.Nat
 \import Data.Bool
 \import Data.List \hiding (headDef)
-\import hw06
-\import lect08
+\import Meta (mcases)
 \import Order.LinearOrder
+\import Paths
+\import Paths.Meta
+\import lect08
 \open LinearOrder
 
 -- 1. Реализуйте функцию filter и докажите ее корректность, то есть, что выполнены следующие условия:
 --    * filter p xs является подсписком xs
 --    * Все элементы filter p xs удовлетворяют предикату p
 --    * Любой подсписок xs с тем же свойством является подсписком filter p xs
+
+\func filter {A : \Type} (p : A -> Bool) (xs : List A) : List A
+  | p, nil => nil
+  | p, a :: xs => \case p a \with {
+    | false => filter p xs
+    | true => a :: filter p xs
+  }
+
+\data SubList {A : \Type} (xs ys : List A) \elim xs, ys
+  | nil, ys => nil-sublist
+  | x :: xs, y :: ys => head-eq-sublist (x = y) (SubList xs ys)
+  | xs, y :: ys => tail-sublist (SubList xs ys)
+
+\func filter-sublist {A : \Type} (p : A -> Bool) (xs : List A) : SubList (filter p xs) xs
+  | p, nil => nil-sublist
+  | p, a :: xs => mcases \with {
+    | false => tail-sublist (filter-sublist p xs)
+    | true => head-eq-sublist idp (filter-sublist p xs)
+  }
+
+\data TrueForAll {A : \Type} (p : A -> Bool) (xs : List A) \elim xs
+  | nil => nil-true-forall
+  | x :: xs => cons-true-forall (p x = true) (TrueForAll p xs)
+
+\func p-true-forall-in-filter {A : \Type} (p : A -> Bool) (xs : List A) : TrueForAll p (filter p xs) \elim xs
+  | nil => nil-true-forall
+  | a :: xs => \case p a \as b, idp : _ = b  \return TrueForAll p (\case b \with {
+    | false => filter p xs
+    | true => a :: filter p xs
+  }) \with {
+    | false, d => p-true-forall-in-filter p xs
+    | true, d => cons-true-forall d (p-true-forall-in-filter p xs)
+  }
+
+\func trans {A : \Type} {a a' a'' : A} (p : a = a') (q : a' = a'') : a = a''
+  => transport (\lam x => a = x) q p
+
+\func sublist-trans {A : \Type} {xs ys zs : List A} (sl1 : SubList xs ys) (sl2 : SubList ys zs) : SubList xs zs
+  | {A}, {nil}, {nil}, nil-sublist, nil-sublist => nil-sublist
+  | {A}, {nil}, {x :: ys}, {y :: zs}, nil-sublist, head-eq-sublist p sl2 => nil-sublist
+  | {A}, {nil}, {ys}, {y :: zs}, nil-sublist, tail-sublist sl2 => nil-sublist
+  | {A}, {x :: xs}, {x1 :: ys}, {y :: zs}, head-eq-sublist p sl1, head-eq-sublist p1 sl2
+      => head-eq-sublist (trans p p1) (sublist-trans sl1 sl2)
+  | {A}, {x :: xs}, {y :: ys}, {z :: zs}, head-eq-sublist p sl1, tail-sublist sl2 => tail-sublist (sublist-trans (head-eq-sublist p sl1) sl2)
+  | {A}, {xs}, {x :: ys}, {z :: zs}, tail-sublist sl1, head-eq-sublist p sl2 => tail-sublist (sublist-trans sl1 sl2)
+  | {A}, {xs}, {y :: ys}, {z :: zs}, tail-sublist sl1, tail-sublist sl2 => tail-sublist (sublist-trans sl1 (lem sl2))
+  \where {
+      \func lem {A : \Type} {xs ys : List A} {x : A} (sl1 : SubList (x :: xs) ys) : SubList xs ys
+        | {A}, {xs}, {y :: ys}, head-eq-sublist p sl1 => tail-sublist sl1
+        | {A}, {xs}, {y :: ys}, tail-sublist sl1 =>
+          \let
+            | sl2 => lem sl1
+          \in tail-sublist sl2
+  }
+
+-- \elim xs, ys, zs
+--   | nil, ys, zs => nil-sublist
+--   | x :: xs, nil, zs => {?}
+--   | x :: xs, y :: ys, nil => {?}
+--   | x :: xs, y :: ys, z :: zs => \case sl1, sl2 \return SubList (x :: xs) (z :: zs) \with {
+--     | head-eq-sublist p s, head-eq-sublist p1 s1 => head-eq-sublist (trans p p1) (sublist-trans s s1)
+--     | head-eq-sublist p s, tail-sublist s1 => tail-sublist {?}
+--     | tail-sublist s, head-eq-sublist p s1 => {?}
+--     | tail-sublist s, tail-sublist s1 => tail-sublist (sublist-trans s {?})
+--   }
+
+\func sublist-p-forall-is-sublist-of-filter
+  (p : Bool -> Bool) (xs ys : List Bool) (sl : SubList ys xs) (fa : TrueForAll p ys)
+  : SubList ys (filter p xs) \elim xs, ys
+  | nil, nil => nil-sublist
+  | nil, a :: ys => {?}
+  | a :: xs, nil => nil-sublist
+  | x :: xs, y :: ys => \case sl, fa, (p x) \as b \return SubList (y :: ys) (\case b \with {
+    | false => filter p xs
+    | true => x :: filter p xs
+  }) \with {
+    | head-eq-sublist p1 s, cons-true-forall p2 t, false =>
+      \let
+        | sl1 => sublist-trans
+      \in {?}
+    | head-eq-sublist p1 s, cons-true-forall p2 t, true => head-eq-sublist p1 (sublist-p-forall-is-sublist-of-filter p xs ys s t)
+    | tail-sublist s, cons-true-forall p1 t, false => {?}
+    | tail-sublist s, cons-true-forall p1 t, true => {?}
+  }
 
 -- 2. Докажите, что Perm l1 l2 тогда и только тогда, когда Insertion.sort l1 = Insertion.sort l2.
 
@@ -19,6 +107,37 @@
 
 -- 4. Определите факториал через хвостовую рекурсию.
 --    Докажите, что он равен обычному определению факториала.
+
+\open Nat
+
+\func fact (n : Nat) : Nat
+  | 0 => 1
+  | suc n => n * fact n
+
+\func fact-tail (n : Nat) : Nat => tail-fact n 1
+  \where {
+    \func tail-fact (n acc : Nat) : Nat
+      | 0, acc => acc
+      | suc n, acc => tail-fact n (n * acc)
+  }
+
+\func fact-eq (n : Nat) : fact n = fact-tail n
+  | 0 => idp
+  | suc n =>
+    \let
+      | l => lem' (suc n) 1
+    \in rewrite (l, NatSemiring.ide-left) idp
+  \where {
+    \func lem' (n acc : Nat) : fact-tail.tail-fact n acc = acc * fact n \elim n
+      | 0 => idp
+      | suc n =>
+        \let
+          | rec => lem' n (n * acc)
+          | rec1 => rewrite NatSemiring.*-comm rec
+          | rec2 => rewrite NatSemiring.*-assoc rec1
+          | rec3 => rewrite NatSemiring.*-comm rec2
+        \in rec3
+  }
 
 -- 5. Определите функцию, которая проверяет правильность скобочной последовательности.
 --    Докажите ее корректность.
